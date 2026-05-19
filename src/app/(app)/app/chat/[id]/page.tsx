@@ -164,34 +164,46 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       mediaRecorder.onstop = async () => {
         const dur = recordingDuration;
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        if (audioBlob.size > 500000) {
-          toast.error('Голосовое слишком большое (макс 30 сек)');
+        if (audioBlob.size > 400000) {
+          toast.error('Голосовое слишком большое');
           stream.getTracks().forEach((t) => t.stop());
           return;
         }
-        const reader = new FileReader();
-        reader.readAsDataURL(audioBlob);
-        reader.onloadend = async () => {
-          const base64audio = reader.result as string;
-          if (base64audio && chatId) {
-            try {
-              const mins = Math.floor(dur / 60);
-              const secs = dur % 60;
-              const label = `🎤 ${mins}:${secs.toString().padStart(2, '0')}`;
-              const res = await fetch(`/api/messages/${chatId}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text: label, voice_url: base64audio }),
-              });
-              if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                toast.error(err.error || 'Ошибка отправки голоса');
-              }
-            } catch {
-              toast.error('Ошибка отправки голоса');
+        const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.webm`;
+        const { data: uploadData, error: uploadError } = await supabase
+          .storage
+          .from('voice')
+          .upload(`public/${fileName}`, audioBlob, { contentType: 'audio/webm' });
+
+        if (uploadError || !uploadData) {
+          toast.error('Ошибка загрузки голоса');
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+
+        const { data: { publicUrl } } = supabase
+          .storage
+          .from('voice')
+          .getPublicUrl(`public/${fileName}`);
+
+        if (chatId) {
+          try {
+            const mins = Math.floor(dur / 60);
+            const secs = dur % 60;
+            const label = `🎤 ${mins}:${secs.toString().padStart(2, '0')}`;
+            const res = await fetch(`/api/messages/${chatId}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: label, voice_url: publicUrl }),
+            });
+            if (!res.ok) {
+              const err = await res.json().catch(() => ({}));
+              toast.error(err.error || 'Ошибка отправки голоса');
             }
+          } catch {
+            toast.error('Ошибка отправки голоса');
           }
-        };
+        }
         stream.getTracks().forEach((t) => t.stop());
       };
 
@@ -201,7 +213,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
       recordingTimerRef.current = setInterval(() => {
         setRecordingDuration((prev) => {
-          if (prev >= 15) { stopRecording(); return 15; }
+          if (prev >= 30) { stopRecording(); return 30; }
           return prev + 1;
         });
       }, 1000);
