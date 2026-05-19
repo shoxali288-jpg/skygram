@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 import { useApp } from '@/app/ClientLayout';
-import { FiArrowLeft, FiSearch, FiTrash2, FiStar } from 'react-icons/fi';
-import { BsCheckCircleFill, BsCheck2, BsCheck2All } from 'react-icons/bs';
+import { FiArrowLeft, FiSearch, FiTrash2, FiStar, FiMic } from 'react-icons/fi';
+import { BsCheckCircleFill, BsCheck2, BsCheck2All, BsPlayFill, BsStopFill } from 'react-icons/bs';
 import { IoSend } from 'react-icons/io5';
 import { playNotificationSound } from '@/lib/sound';
 
@@ -15,6 +15,7 @@ interface Message {
   chat_id: string;
   sender_id: string;
   text: string;
+  voice_url: string | null;
   created_at: string;
   edited_at: string | null;
   is_deleted: boolean;
@@ -41,6 +42,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [isPinned, setIsPinned] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
 
   useEffect(() => {
     params.then((p) => setChatId(p.id));
@@ -140,6 +148,74 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         body: JSON.stringify({ chatId }),
       });
     } catch {}
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+        reader.onloadend = async () => {
+          const base64audio = reader.result as string;
+          if (base64audio && chatId) {
+            try {
+              const res = await fetch(`/api/messages/${chatId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: '🎤 Голосовое сообщение', voice_url: base64audio }),
+              });
+              if (!res.ok) toast.error('Ошибка отправки');
+            } catch { toast.error('Ошибка отправки'); }
+          }
+        };
+        stream.getTracks().forEach((t) => t.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingDuration(0);
+
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingDuration((prev) => {
+          if (prev >= 30) { stopRecording(); return 30; }
+          return prev + 1;
+        });
+      }, 1000);
+    } catch {
+      toast.error('Разрешите доступ к микрофону');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecording(false);
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+  };
+
+  const toggleVoicePlay = (msg: Message) => {
+    if (playingVoiceId === msg.id) {
+      if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+      setPlayingVoiceId(null);
+    } else {
+      if (audioRef.current) { audioRef.current.pause(); }
+      const audio = new Audio(msg.voice_url!);
+      audioRef.current = audio;
+      audio.onended = () => setPlayingVoiceId(null);
+      audio.play().catch(() => toast.error('Ошибка воспроизведения'));
+      setPlayingVoiceId(msg.id);
+    }
   };
 
   const sendMessage = async () => {
@@ -358,10 +434,35 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 </div>
                 {replyMsg && (
                   <div className="reply-preview">
-                    {replyMsg.is_deleted ? 'Сообщение удалено' : replyMsg.text}
+                    {replyMsg.is_deleted ? 'Сообщение удалено' : (replyMsg.voice_url ? '🎤 Голосовое сообщение' : replyMsg.text)}
                   </div>
                 )}
-                <span>{msg.text}</span>
+                {msg.voice_url ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 120 }}>
+                    <button
+                      onClick={() => toggleVoicePlay(msg)}
+                      style={{
+                        width: 36, height: 36, borderRadius: '50%', border: 'none',
+                        background: 'var(--primary)', color: 'white', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '1rem', flexShrink: 0,
+                      }}
+                    >
+                      {playingVoiceId === msg.id ? <BsStopFill /> : <BsPlayFill />}
+                    </button>
+                    <div style={{ flex: 1, height: 4, borderRadius: 2, background: 'var(--border)', position: 'relative' }}>
+                      <div style={{
+                        width: playingVoiceId === msg.id ? '100%' : '60%', height: '100%',
+                        borderRadius: 2, background: 'var(--primary)', transition: 'width 0.3s',
+                      }} />
+                    </div>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                      {msg.text === '🎤 Голосовое сообщение' ? '' : msg.text}
+                    </span>
+                  </div>
+                ) : (
+                  <span>{msg.text}</span>
+                )}
                 <div className="message-time">
                   {formatTime(msg.created_at)}
                   {msg.edited_at && <span style={{ fontSize: '0.65rem' }}> (ред.)</span>}
@@ -402,18 +503,53 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           </div>
         )}
         <div className="message-input-wrapper">
-          <input
-            ref={inputRef}
-            type="text"
-            placeholder="Написать сообщение..."
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            onKeyDown={handleKeyDown}
-            maxLength={4096}
-          />
-          <button className="send-btn" onClick={sendMessage} disabled={!newMessage.trim() || !isOnline}>
-            <IoSend />
-          </button>
+          {isRecording ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, padding: '0.2rem 0.5rem' }}>
+              <span style={{ color: '#ef4444', fontWeight: 600, animation: 'splashPulse 1s infinite' }}>
+                🔴 {recordingDuration}s
+              </span>
+              <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Говорите...</span>
+              <button onClick={stopRecording} style={{
+                marginLeft: 'auto', width: 32, height: 32, borderRadius: '50%', border: 'none',
+                background: '#ef4444', color: 'white', cursor: 'pointer', display: 'flex',
+                alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem',
+              }}>
+                <BsStopFill />
+              </button>
+            </div>
+          ) : (
+            <>
+              <input
+                ref={inputRef}
+                type="text"
+                placeholder="Написать сообщение..."
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                onKeyDown={handleKeyDown}
+                maxLength={4096}
+              />
+              {newMessage.trim() ? (
+                <button className="send-btn" onClick={sendMessage} disabled={!isOnline}>
+                  <IoSend />
+                </button>
+              ) : (
+                <button
+                  onClick={startRecording}
+                  style={{
+                    width: 38, height: 38, borderRadius: '50%', border: 'none',
+                    background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem',
+                    transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.color = 'var(--primary)'}
+                  onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
+                  title="Голосовое сообщение"
+                >
+                  <FiMic />
+                </button>
+              )}
+            </>
+          )}
         </div>
       </div>
 

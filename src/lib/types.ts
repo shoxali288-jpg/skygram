@@ -23,6 +23,7 @@ export interface Message {
   chat_id: string;
   sender_id: string;
   text: string;
+  voice_url: string | null;
   created_at: string;
   edited_at: string | null;
   is_deleted: boolean;

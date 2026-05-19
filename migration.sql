@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS messages (
   chat_id UUID NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
   sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   text TEXT NOT NULL,
+  voice_url TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   edited_at TIMESTAMPTZ,
   is_deleted BOOLEAN DEFAULT false,

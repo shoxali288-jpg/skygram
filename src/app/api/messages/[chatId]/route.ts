@@ -52,19 +52,19 @@ export async function POST(
     if (!session) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 });
 
     const { chatId } = await params;
-    const { text, reply_to_message_id } = await request.json();
+    const { text, reply_to_message_id, voice_url } = await request.json();
 
-    if (!text || typeof text !== 'string') {
-      return NextResponse.json({ error: 'Пустое сообщение' }, { status: 400 });
-    }
-
-    if (text.length > 4096) {
-      return NextResponse.json({ error: 'Сообщение слишком длинное' }, { status: 400 });
-    }
-
-    const trimmed = text.trim();
-    if (!trimmed) {
-      return NextResponse.json({ error: 'Пустое сообщение' }, { status: 400 });
+    if (!voice_url) {
+      if (!text || typeof text !== 'string') {
+        return NextResponse.json({ error: 'Пустое сообщение' }, { status: 400 });
+      }
+      if (text.length > 4096) {
+        return NextResponse.json({ error: 'Сообщение слишком длинное' }, { status: 400 });
+      }
+      const trimmed = text.trim();
+      if (!trimmed) {
+        return NextResponse.json({ error: 'Пустое сообщение' }, { status: 400 });
+      }
     }
 
     const { data: chat } = await supabase.from('chats').select('*').eq('id', chatId).single();
@@ -85,9 +85,12 @@ export async function POST(
     const messageData: Record<string, unknown> = {
       chat_id: chatId,
       sender_id: session.userId,
-      text: trimmed,
+      text: voice_url ? text : text.trim(),
       is_read: false,
     };
+    if (voice_url) {
+      messageData.voice_url = voice_url;
+    }
     if (reply_to_message_id) {
       messageData.reply_to_message_id = reply_to_message_id;
     }
