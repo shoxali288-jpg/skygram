@@ -829,6 +829,11 @@ body {
   color: var(--primary);
 }
 
+/* Mobile back button */
+.mobile-back {
+  display: none;
+}
+
 /* Bottom Nav for mobile */
 .bottom-nav {
   display: none;
@@ -893,6 +898,10 @@ body {
 
   .main-content {
     padding-bottom: 70px;
+  }
+
+  .mobile-back {
+    display: flex !important;
   }
 
   .sidebar.hidden {

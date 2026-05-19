@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 import { useApp } from '@/app/ClientLayout';
-import { FiArrowLeft, FiSearch, FiTrash2, FiStar, FiMic } from 'react-icons/fi';
+import { FiArrowLeft, FiSearch, FiTrash2, FiStar, FiMic, FiPaperclip, FiSmile } from 'react-icons/fi';
 import { BsCheckCircleFill, BsCheck2, BsCheck2All, BsPlayFill, BsStopFill } from 'react-icons/bs';
 import { IoSend } from 'react-icons/io5';
 import { playNotificationSound } from '@/lib/sound';
@@ -16,6 +16,7 @@ interface Message {
   sender_id: string;
   text: string;
   voice_url: string | null;
+  media_url: string | null;
   created_at: string;
   edited_at: string | null;
   is_deleted: boolean;
@@ -49,6 +50,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showStickers, setShowStickers] = useState(false);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+
+  const stickers = ['👍', '❤️', '😂', '😢', '😡', '🔥', '💯', '🎉', '👏', '🤝', '😊', '🥰', '😎', '🤔', '🙏', '💪'];
 
   useEffect(() => {
     params.then((p) => setChatId(p.id));
@@ -349,6 +355,66 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !chatId) return;
+    setUploadingMedia(true);
+    try {
+      const isImage = file.type.startsWith('image/');
+      const ext = file.name.split('.').pop() || (isImage ? 'jpg' : 'mp4');
+      const fileName = `chat_${chatId}_${Date.now()}.${ext}`;
+      const { data: uploadData, error: uploadError } = await supabase
+        .storage
+        .from('media')
+        .upload(fileName, file, { contentType: file.type, upsert: false });
+
+      if (uploadError || !uploadData) {
+        toast.error(uploadError?.message || 'Ошибка загрузки');
+        return;
+      }
+
+      const { data: urlData } = supabase.storage.from('media').getPublicUrl(fileName);
+      const mediaUrl = urlData.publicUrl;
+
+      const res = await fetch(`/api/messages/${chatId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: isImage ? '📷 Фото' : '🎥 Видео',
+          media_url: mediaUrl,
+          reply_to_message_id: replyTo?.id || null,
+        }),
+      });
+      if (res.ok) {
+        setReplyTo(null);
+        scrollToBottom();
+      } else {
+        toast.error('Ошибка отправки');
+      }
+    } catch {
+      toast.error('Ошибка загрузки');
+    } finally {
+      setUploadingMedia(false);
+      if (e.target) e.target.value = '';
+    }
+  };
+
+  const sendSticker = async (emoji: string) => {
+    if (!chatId) return;
+    try {
+      await fetch(`/api/messages/${chatId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: emoji, reply_to_message_id: replyTo?.id || null }),
+      });
+      setReplyTo(null);
+      setShowStickers(false);
+      scrollToBottom();
+    } catch {
+      toast.error('Ошибка отправки');
+    }
+  };
+
   const formatTime = (dateStr: string) => {
     const d = new Date(dateStr);
     return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
@@ -380,7 +446,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       <div className="chat-header">
         <button
           onClick={() => router.push('/app')}
-          style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1.2rem', padding: '0.3rem', display: 'none' }}
+          style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1.2rem', padding: '0.3rem' }}
           className="mobile-back"
         >
           <FiArrowLeft />
@@ -464,6 +530,15 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                     {replyMsg.is_deleted ? 'Сообщение удалено' : (replyMsg.voice_url ? '🎤 Голосовое сообщение' : replyMsg.text)}
                   </div>
                 )}
+                {msg.media_url && (
+                  <div style={{ marginBottom: msg.text && !msg.voice_url ? '0.4rem' : 0 }}>
+                    {msg.media_url.match(/\.(mp4|webm|mov)$/i) ? (
+                      <video src={msg.media_url} controls style={{ maxWidth: '100%', maxHeight: 300, borderRadius: 8 }} />
+                    ) : (
+                      <img src={msg.media_url} alt="" style={{ maxWidth: '100%', maxHeight: 300, borderRadius: 8, display: 'block' }} loading="lazy" />
+                    )}
+                  </div>
+                )}
                 {msg.voice_url ? (
                   <VoiceMessagePlayer
                     voiceUrl={msg.voice_url}
@@ -472,7 +547,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                     isPlaying={playingVoiceId === msg.id}
                     onPlay={() => toggleVoicePlay(msg)}
                   />
-                ) : (
+                ) : msg.text && (
                   <span>{msg.text}</span>
                 )}
                 <div className="message-time">
@@ -514,6 +589,30 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             <span className="cancel-reply" onClick={cancelEdit}>✕</span>
           </div>
         )}
+        {showStickers && (
+          <div style={{
+            padding: '0.5rem', borderTop: '1px solid var(--border)',
+            background: 'var(--surface)', display: 'flex', flexWrap: 'wrap', gap: '0.5rem',
+            justifyContent: 'center', maxHeight: 160, overflowY: 'auto',
+          }}>
+            {stickers.map((s) => (
+              <button
+                key={s}
+                onClick={() => sendSticker(s)}
+                style={{
+                  width: 44, height: 44, borderRadius: '10px', border: 'none',
+                  background: 'var(--background)', cursor: 'pointer', fontSize: '1.5rem',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 0.1s',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--border)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'var(--background)'}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="message-input-wrapper">
           {isRecording ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, padding: '0.2rem 0.5rem' }}>
@@ -532,6 +631,27 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           ) : (
             <>
               <input
+                ref={fileInputRef}
+                type="file" accept="image/*,video/*"
+                style={{ display: 'none' }}
+                onChange={handleFileUpload}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingMedia}
+                style={{
+                  width: 36, height: 36, borderRadius: '50%', border: 'none',
+                  background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem',
+                  flexShrink: 0, transition: 'all 0.15s',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.color = 'var(--primary)'}
+                onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
+                title="Прикрепить фото/видео"
+              >
+                <FiPaperclip />
+              </button>
+              <input
                 ref={inputRef}
                 type="text"
                 placeholder="Написать сообщение..."
@@ -545,20 +665,37 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   <IoSend />
                 </button>
               ) : (
-                <button
-                  onClick={startRecording}
-                  style={{
-                    width: 38, height: 38, borderRadius: '50%', border: 'none',
-                    background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem',
-                    transition: 'all 0.15s',
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.color = 'var(--primary)'}
-                  onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
-                  title="Голосовое сообщение"
-                >
-                  <FiMic />
-                </button>
+                <>
+                  <button
+                    onClick={() => setShowStickers(!showStickers)}
+                    style={{
+                      width: 36, height: 36, borderRadius: '50%', border: 'none',
+                      background: showStickers ? 'var(--primary-light)' : 'transparent',
+                      color: showStickers ? 'var(--primary)' : 'var(--text-secondary)',
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '1.1rem', flexShrink: 0, transition: 'all 0.15s',
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.color = 'var(--primary)'}
+                    onMouseLeave={(e) => { if (!showStickers) e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                    title="Стикеры"
+                  >
+                    <FiSmile />
+                  </button>
+                  <button
+                    onClick={startRecording}
+                    style={{
+                      width: 36, height: 36, borderRadius: '50%', border: 'none',
+                      background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem',
+                      flexShrink: 0, transition: 'all 0.15s',
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.color = 'var(--primary)'}
+                    onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
+                    title="Голосовое сообщение"
+                  >
+                    <FiMic />
+                  </button>
+                </>
               )}
             </>
           )}

@@ -52,13 +52,13 @@ export async function POST(
     if (!session) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 });
 
     const { chatId } = await params;
-    const { text, reply_to_message_id, voice_url } = await request.json();
+    const { text, reply_to_message_id, voice_url, media_url } = await request.json();
 
     if (voice_url && voice_url.length > 700000) {
       return NextResponse.json({ error: 'Голосовое слишком большое' }, { status: 400 });
     }
 
-    if (!voice_url) {
+    if (!voice_url && !media_url) {
       if (!text || typeof text !== 'string') {
         return NextResponse.json({ error: 'Пустое сообщение' }, { status: 400 });
       }
@@ -89,11 +89,14 @@ export async function POST(
     const messageData: Record<string, unknown> = {
       chat_id: chatId,
       sender_id: session.userId,
-      text: voice_url ? text : text.trim(),
+      text: voice_url || media_url ? text : text.trim(),
       is_read: false,
     };
     if (voice_url) {
       messageData.voice_url = voice_url;
+    }
+    if (media_url) {
+      messageData.media_url = media_url;
     }
     if (reply_to_message_id) {
       messageData.reply_to_message_id = reply_to_message_id;
