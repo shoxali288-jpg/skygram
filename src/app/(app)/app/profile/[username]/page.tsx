@@ -112,6 +112,25 @@ export default function ProfilePage({ params }: { params: Promise<{ username: st
             Администратор
           </div>
         )}
+        {profileUser.bio && (
+          <div style={{ marginTop: '1rem', padding: '0.75rem 1rem', background: 'var(--surface)', borderRadius: '12px', border: '1px solid var(--border)', fontSize: '0.9rem', color: 'var(--text)', maxWidth: 360, textAlign: 'center' }}>
+            {profileUser.bio}
+          </div>
+        )}
+        {(profileUser.phone || profileUser.birth_date) && (
+          <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.4rem', alignItems: 'center' }}>
+            {profileUser.phone && (
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                📞 {profileUser.phone}
+              </div>
+            )}
+            {profileUser.birth_date && (
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                🎂 {new Date(profileUser.birth_date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
+              </div>
+            )}
+          </div>
+        )}
         <div className="profile-actions">
           <button className="sky-btn" onClick={startChat} disabled={creatingChat}>
             <FiMessageSquare style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} />

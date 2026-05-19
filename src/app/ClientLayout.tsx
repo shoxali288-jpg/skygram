@@ -11,6 +11,12 @@ interface User {
   is_verified: boolean;
   is_blocked: boolean;
   last_seen: string;
+  phone: string | null;
+  bio: string | null;
+  birth_date: string | null;
+  show_phone: boolean;
+  show_bio: boolean;
+  show_birth_date: boolean;
 }
 
 interface AppContextType {

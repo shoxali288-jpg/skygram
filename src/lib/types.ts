@@ -8,6 +8,12 @@ export interface User {
   is_blocked: boolean;
   created_at: string;
   last_seen: string;
+  phone: string | null;
+  bio: string | null;
+  birth_date: string | null;
+  show_phone: boolean;
+  show_bio: boolean;
+  show_birth_date: boolean;
 }
 
 export interface Chat {

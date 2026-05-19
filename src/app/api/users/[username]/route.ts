@@ -17,7 +17,7 @@ export async function GET(
 
     const { data: user, error } = await supabase
       .from('users')
-      .select('id, username, avatar_url, role, is_verified, last_seen')
+      .select('id, username, avatar_url, role, is_verified, last_seen, phone, bio, birth_date, show_phone, show_bio, show_birth_date')
       .eq('username', usernameLower)
       .single();
 
@@ -25,7 +25,21 @@ export async function GET(
       return NextResponse.json({ error: 'Пользователь не найден' }, { status: 404 });
     }
 
-    return NextResponse.json({ user });
+    const isOwner = session.userId === user.id;
+    const result: Record<string, unknown> = {
+      id: user.id,
+      username: user.username,
+      avatar_url: user.avatar_url,
+      role: user.role,
+      is_verified: user.is_verified,
+      last_seen: user.last_seen,
+    };
+
+    if (isOwner || user.show_phone) result.phone = user.phone;
+    if (isOwner || user.show_bio) result.bio = user.bio;
+    if (isOwner || user.show_birth_date) result.birth_date = user.birth_date;
+
+    return NextResponse.json({ user: result });
   } catch {
     return NextResponse.json({ error: 'Ошибка сервера' }, { status: 500 });
   }
