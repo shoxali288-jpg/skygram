@@ -112,21 +112,42 @@ export default function ProfilePage({ params }: { params: Promise<{ username: st
             Администратор
           </div>
         )}
-        {profileUser.bio && (
-          <div style={{ marginTop: '1rem', padding: '0.75rem 1rem', background: 'var(--surface)', borderRadius: '12px', border: '1px solid var(--border)', fontSize: '0.9rem', color: 'var(--text)', maxWidth: 360, textAlign: 'center' }}>
-            {profileUser.bio}
-          </div>
-        )}
-        {(profileUser.phone || profileUser.birth_date) && (
-          <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.4rem', alignItems: 'center' }}>
+        {/* Info card like Telegram */}
+        {(profileUser.bio || profileUser.phone || profileUser.birth_date) && (
+          <div style={{
+            marginTop: '1.25rem', width: '100%', maxWidth: 360,
+            background: 'var(--surface)', borderRadius: '14px',
+            border: '1px solid var(--border)', overflow: 'hidden',
+          }}>
+            {profileUser.bio && (
+              <div style={{
+                padding: '0.85rem 1rem',
+                borderBottom: (profileUser.phone || profileUser.birth_date) ? '1px solid var(--border)' : 'none',
+                fontSize: '0.9rem', color: 'var(--text)', lineHeight: 1.4,
+                textAlign: 'left',
+              }}>
+                {profileUser.bio}
+              </div>
+            )}
             {profileUser.phone && (
-              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                📞 {profileUser.phone}
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '0.75rem 1rem',
+                borderBottom: profileUser.birth_date ? '1px solid var(--border)' : 'none',
+              }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Телефон</span>
+                <span style={{ fontSize: '0.9rem', color: 'var(--text)' }}>{profileUser.phone}</span>
               </div>
             )}
             {profileUser.birth_date && (
-              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                🎂 {new Date(profileUser.birth_date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '0.75rem 1rem',
+              }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Дата рождения</span>
+                <span style={{ fontSize: '0.9rem', color: 'var(--text)' }}>
+                  {new Date(profileUser.birth_date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
+                </span>
               </div>
             )}
           </div>
