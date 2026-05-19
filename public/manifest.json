@@ -1,0 +1,36 @@
+{
+  "name": "Skygram",
+  "short_name": "Skygram",
+  "description": "Современный мессенджер Skygram",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0088cc",
+  "theme_color": "#0088cc",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "categories": ["social", "messaging"],
+  "lang": "ru-RU",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "apple"
+    }
+  ],
+  "screenshots": [],
+  "prefer_related_applications": false,
+  "related_applications": []
+}
