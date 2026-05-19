@@ -894,6 +894,7 @@ body {
 
   .bottom-nav {
     display: block;
+    z-index: 300;
   }
 
   .main-content {
@@ -902,6 +903,10 @@ body {
 
   .mobile-back {
     display: flex !important;
+  }
+
+  .sidebar-header h1 + div {
+    display: none;
   }
 
   .sidebar.hidden {
