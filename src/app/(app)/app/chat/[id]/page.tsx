@@ -380,7 +380,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          text: isImage ? '📷 Фото' : '🎥 Видео',
+          text: '',
           media_url: mediaUrl,
           reply_to_message_id: replyTo?.id || null,
         }),
