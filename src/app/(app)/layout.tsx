@@ -129,7 +129,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         user={user}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        onNavigate={(url) => router.push(url)}
       />
     </div>
   );
