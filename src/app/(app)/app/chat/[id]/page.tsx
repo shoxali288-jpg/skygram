@@ -599,7 +599,7 @@ function VoiceMessagePlayer({ voiceUrl, duration, isOwn, isPlaying, onPlay }: {
     audio.play().catch(() => {});
 
     const update = () => {
-      if (audio.duration) {
+      if (audio.duration && !isNaN(audio.duration)) {
         setCurrentTime(audio.currentTime);
         setProgress((audio.currentTime / audio.duration) * 100);
       }
@@ -615,37 +615,49 @@ function VoiceMessagePlayer({ voiceUrl, duration, isOwn, isPlaying, onPlay }: {
 
     return () => {
       cancelAnimationFrame(animRef.current);
-      audio.pause();
-      audioRef.current = null;
+      if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
     };
   }, [isPlaying, voiceUrl]);
 
+  const dispTime = isPlaying ? formatTime(currentTime) : '0:00';
+  const dispTotal = duration.replace('🎤 ', '');
+
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', minWidth: 180, maxWidth: 260 }}>
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: '0.5rem',
+      minWidth: 180, maxWidth: 260, padding: '0.1rem 0',
+    }}>
       <button
         onClick={onPlay}
         style={{
-          width: 34, height: 34, borderRadius: '50%', border: 'none',
-          background: isOwn ? 'var(--primary)' : 'var(--primary)',
-          color: 'white', cursor: 'pointer',
+          width: 32, height: 32, borderRadius: '50%', border: 'none',
+          background: 'var(--primary)', color: 'white', cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '0.9rem', flexShrink: 0,
+          fontSize: '0.8rem', flexShrink: 0,
         }}
       >
         {isPlaying ? <BsStopFill /> : <BsPlayFill />}
       </button>
-      <div style={{ flex: 1, position: 'relative' }}>
-        <div style={{ height: 4, borderRadius: 2, background: isOwn ? 'rgba(0,0,0,0.1)' : 'var(--border)', overflow: 'hidden' }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          height: 6, borderRadius: 3,
+          background: isOwn ? 'rgba(0,0,0,0.08)' : 'var(--border)',
+          position: 'relative', overflow: 'hidden', cursor: 'pointer',
+        }}>
           <div style={{
             width: `${Math.min(progress, 100)}%`, height: '100%',
-            borderRadius: 2, background: 'var(--primary)',
+            borderRadius: 3, background: 'var(--primary)',
             transition: 'width 0.1s linear',
           }} />
         </div>
-        <div style={{ marginTop: '0.2rem', fontSize: '0.7rem', color: 'var(--text-secondary)', textAlign: 'right' }}>
-          {isPlaying ? formatTime(currentTime) : duration.replace('🎤 ', '')}
-        </div>
       </div>
+      <span style={{
+        fontSize: '0.72rem', color: 'var(--text-secondary)',
+        fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+        minWidth: 52, textAlign: 'right',
+      }}>
+        {isPlaying ? dispTime : dispTotal}
+      </span>
     </div>
   );
 }
