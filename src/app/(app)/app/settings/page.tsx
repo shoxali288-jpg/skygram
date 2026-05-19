@@ -4,6 +4,7 @@ import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { FiArrowLeft, FiUser, FiLogOut, FiImage, FiBell, FiMoon, FiSun, FiDroplet } from 'react-icons/fi';
+import { BsCheckCircleFill } from 'react-icons/bs';
 import { useApp } from '@/app/ClientLayout';
 
 const themes = [
@@ -73,7 +74,10 @@ export default function SettingsPage() {
             {user?.avatar_url ? <img src={user.avatar_url} alt="" /> : getAvatarLetter(user?.username || '')}
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 600, fontSize: '1.05rem' }}>@{user?.username}</div>
+            <div style={{ fontWeight: 600, fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              @{user?.username}
+              {user?.is_verified && <BsCheckCircleFill className="verified-badge" />}
+            </div>
             <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
               {user?.role === 'admin' ? 'Администратор' : 'Пользователь'}
             </div>
