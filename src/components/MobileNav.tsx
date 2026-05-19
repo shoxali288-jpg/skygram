@@ -1,6 +1,6 @@
 'use client';
 
-import { FiMessageSquare, FiSearch, FiSettings } from 'react-icons/fi';
+import { FiMessageSquare, FiSettings } from 'react-icons/fi';
 
 interface MobileNavProps {
   user: any;
@@ -19,13 +19,6 @@ export default function MobileNav({ user, activeTab, setActiveTab, onNavigate }:
         >
           <FiMessageSquare />
           <span>Чаты</span>
-        </button>
-        <button
-          className={`bottom-nav-item ${activeTab === 'search' ? 'active' : ''}`}
-          onClick={() => { setActiveTab('search'); onNavigate('/app/search'); }}
-        >
-          <FiSearch />
-          <span>Поиск</span>
         </button>
         <button
           className={`bottom-nav-item ${activeTab === 'settings' ? 'active' : ''}`}
