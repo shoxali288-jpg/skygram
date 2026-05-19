@@ -173,18 +173,19 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         const { data: uploadData, error: uploadError } = await supabase
           .storage
           .from('voice')
-          .upload(`public/${fileName}`, audioBlob, { contentType: 'audio/webm' });
+          .upload(fileName, audioBlob, { contentType: 'audio/webm', upsert: false });
 
         if (uploadError || !uploadData) {
-          toast.error('Ошибка загрузки голоса');
+          toast.error(uploadError?.message || 'Ошибка загрузки голоса');
           stream.getTracks().forEach((t) => t.stop());
           return;
         }
 
-        const { data: { publicUrl } } = supabase
+        const { data: urlData } = supabase
           .storage
           .from('voice')
-          .getPublicUrl(`public/${fileName}`);
+          .getPublicUrl(fileName);
+        const publicUrl = urlData.publicUrl;
 
         if (chatId) {
           try {
