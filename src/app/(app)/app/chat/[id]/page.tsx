@@ -54,9 +54,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     const messagesSub = supabase
       .channel(`messages:${chatId}`)
       .on(
-        'postgres_changes',
+         'postgres_changes',
         { event: '*', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` },
-        (payload) => {
+        (payload: any) => {
           if (payload.eventType === 'INSERT') {
             const newMsg = payload.new as Message;
             setMessages((prev) => {
@@ -79,7 +79,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
     const typingSub = supabase
       .channel(`typing:${chatId}`)
-      .on('broadcast', { event: 'typing' }, (payload) => {
+      .on('broadcast', { event: 'typing' }, (payload: any) => {
         const { username, userId: typingUserId } = payload.payload;
         if (typingUserId !== user.id) {
           setTypingUsers((prev) => new Set(prev).add(username));

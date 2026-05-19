@@ -20,7 +20,7 @@ export async function GET() {
     }
 
     const chatList = await Promise.all(
-      (chats || []).map(async (chat) => {
+      (chats || []).map(async (chat: any) => {
         const otherUserId = chat.user1_id === session.userId ? chat.user2_id : chat.user1_id;
 
         const { data: otherUser } = await supabase
