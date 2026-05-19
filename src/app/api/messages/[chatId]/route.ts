@@ -54,6 +54,10 @@ export async function POST(
     const { chatId } = await params;
     const { text, reply_to_message_id, voice_url } = await request.json();
 
+    if (voice_url && voice_url.length > 700000) {
+      return NextResponse.json({ error: 'Голосовое слишком большое' }, { status: 400 });
+    }
+
     if (!voice_url) {
       if (!text || typeof text !== 'string') {
         return NextResponse.json({ error: 'Пустое сообщение' }, { status: 400 });

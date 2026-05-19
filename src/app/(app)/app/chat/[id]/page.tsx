@@ -164,6 +164,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       mediaRecorder.onstop = async () => {
         const dur = recordingDuration;
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        if (audioBlob.size > 500000) {
+          toast.error('Голосовое слишком большое (макс 30 сек)');
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
         const reader = new FileReader();
         reader.readAsDataURL(audioBlob);
         reader.onloadend = async () => {
@@ -178,8 +183,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ text: label, voice_url: base64audio }),
               });
-              if (!res.ok) toast.error('Ошибка отправки');
-            } catch { toast.error('Ошибка отправки'); }
+              if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                toast.error(err.error || 'Ошибка отправки голоса');
+              }
+            } catch {
+              toast.error('Ошибка отправки голоса');
+            }
           }
         };
         stream.getTracks().forEach((t) => t.stop());
@@ -191,7 +201,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
       recordingTimerRef.current = setInterval(() => {
         setRecordingDuration((prev) => {
-          if (prev >= 30) { stopRecording(); return 30; }
+          if (prev >= 15) { stopRecording(); return 15; }
           return prev + 1;
         });
       }, 1000);
