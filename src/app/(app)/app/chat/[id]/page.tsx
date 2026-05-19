@@ -162,6 +162,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       };
 
       mediaRecorder.onstop = async () => {
+        const dur = recordingDuration;
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         const reader = new FileReader();
         reader.readAsDataURL(audioBlob);
@@ -169,10 +170,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           const base64audio = reader.result as string;
           if (base64audio && chatId) {
             try {
+              const mins = Math.floor(dur / 60);
+              const secs = dur % 60;
+              const label = `🎤 ${mins}:${secs.toString().padStart(2, '0')}`;
               const res = await fetch(`/api/messages/${chatId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text: '🎤 Голосовое сообщение', voice_url: base64audio }),
+                body: JSON.stringify({ text: label, voice_url: base64audio }),
               });
               if (!res.ok) toast.error('Ошибка отправки');
             } catch { toast.error('Ошибка отправки'); }
@@ -344,8 +348,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     return (
       <div className="empty-state" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div className="skeleton" style={{ width: 300, height: 200 }} />
-      </div>
-    );
+    </div>
+  );
   }
 
   return (
@@ -438,28 +442,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   </div>
                 )}
                 {msg.voice_url ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 120 }}>
-                    <button
-                      onClick={() => toggleVoicePlay(msg)}
-                      style={{
-                        width: 36, height: 36, borderRadius: '50%', border: 'none',
-                        background: 'var(--primary)', color: 'white', cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: '1rem', flexShrink: 0,
-                      }}
-                    >
-                      {playingVoiceId === msg.id ? <BsStopFill /> : <BsPlayFill />}
-                    </button>
-                    <div style={{ flex: 1, height: 4, borderRadius: 2, background: 'var(--border)', position: 'relative' }}>
-                      <div style={{
-                        width: playingVoiceId === msg.id ? '100%' : '60%', height: '100%',
-                        borderRadius: 2, background: 'var(--primary)', transition: 'width 0.3s',
-                      }} />
-                    </div>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-                      {msg.text === '🎤 Голосовое сообщение' ? '' : msg.text}
-                    </span>
-                  </div>
+                  <VoiceMessagePlayer
+                    voiceUrl={msg.voice_url}
+                    duration={msg.text}
+                    isOwn={isOwn}
+                    isPlaying={playingVoiceId === msg.id}
+                    onPlay={() => toggleVoicePlay(msg)}
+                  />
                 ) : (
                   <span>{msg.text}</span>
                 )}
@@ -553,16 +542,88 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         </div>
       </div>
 
-      <style jsx>{`
-        .mobile-back {
-          display: none;
-        }
-        @media (max-width: 768px) {
-          .mobile-back {
-            display: block !important;
-          }
-        }
-      `}</style>
+    </div>
+  );
+}
+
+function VoiceMessagePlayer({ voiceUrl, duration, isOwn, isPlaying, onPlay }: {
+  voiceUrl: string; duration: string; isOwn: boolean; isPlaying: boolean; onPlay: () => void;
+}) {
+  const [currentTime, setCurrentTime] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const animRef = useRef<number>(0);
+
+  const totalSeconds = (() => {
+    const match = duration.match(/🎤 (\d+):(\d+)/);
+    if (match) return parseInt(match[1]) * 60 + parseInt(match[2]);
+    return 0;
+  })();
+
+  const formatTime = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m}:${sec.toString().padStart(2, '0')}`;
+  };
+
+  useEffect(() => {
+    if (!isPlaying) {
+      setCurrentTime(0);
+      setProgress(0);
+      return;
+    }
+    const audio = new Audio(voiceUrl);
+    audioRef.current = audio;
+    audio.play().catch(() => {});
+
+    const update = () => {
+      if (audio.duration) {
+        setCurrentTime(audio.currentTime);
+        setProgress((audio.currentTime / audio.duration) * 100);
+      }
+      animRef.current = requestAnimationFrame(update);
+    };
+    animRef.current = requestAnimationFrame(update);
+
+    audio.onended = () => {
+      cancelAnimationFrame(animRef.current);
+      setCurrentTime(totalSeconds);
+      setProgress(100);
+    };
+
+    return () => {
+      cancelAnimationFrame(animRef.current);
+      audio.pause();
+      audioRef.current = null;
+    };
+  }, [isPlaying, voiceUrl]);
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', minWidth: 180, maxWidth: 260 }}>
+      <button
+        onClick={onPlay}
+        style={{
+          width: 34, height: 34, borderRadius: '50%', border: 'none',
+          background: isOwn ? 'var(--primary)' : 'var(--primary)',
+          color: 'white', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '0.9rem', flexShrink: 0,
+        }}
+      >
+        {isPlaying ? <BsStopFill /> : <BsPlayFill />}
+      </button>
+      <div style={{ flex: 1, position: 'relative' }}>
+        <div style={{ height: 4, borderRadius: 2, background: isOwn ? 'rgba(0,0,0,0.1)' : 'var(--border)', overflow: 'hidden' }}>
+          <div style={{
+            width: `${Math.min(progress, 100)}%`, height: '100%',
+            borderRadius: 2, background: 'var(--primary)',
+            transition: 'width 0.1s linear',
+          }} />
+        </div>
+        <div style={{ marginTop: '0.2rem', fontSize: '0.7rem', color: 'var(--text-secondary)', textAlign: 'right' }}>
+          {isPlaying ? formatTime(currentTime) : duration.replace('🎤 ', '')}
+        </div>
+      </div>
     </div>
   );
 }
