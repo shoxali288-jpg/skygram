@@ -74,6 +74,10 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     setTheme(savedTheme);
     setSoundEnabledState(savedSound);
 
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+
     fetch('/api/auth/me')
       .then((res) => res.json())
       .then((data) => {
