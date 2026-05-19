@@ -884,10 +884,15 @@ body {
     position: fixed;
     inset: 0;
     z-index: 200;
+    padding-bottom: 70px;
   }
 
   .bottom-nav {
     display: block;
+  }
+
+  .main-content {
+    padding-bottom: 70px;
   }
 
   .sidebar.hidden {

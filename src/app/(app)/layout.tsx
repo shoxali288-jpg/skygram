@@ -121,7 +121,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         setActiveTab={setActiveTab}
       />
 
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div className="main-content" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {children}
       </div>
 
