@@ -905,8 +905,8 @@ body {
     display: flex !important;
   }
 
-  .sidebar-header h1 + div {
-    display: none;
+  .mobile-hide-btn {
+    display: none !important;
   }
 
   .sidebar.hidden {

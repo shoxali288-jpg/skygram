@@ -46,7 +46,7 @@ const Sidebar = forwardRef<HTMLDivElement, SidebarProps>(({
         </h1>
         <div style={{ display: 'flex', gap: '0.4rem' }}>
           {user.role === 'admin' && (
-            <button
+            <button className="sidebar-nav-btn"
               onClick={() => onNavigate('/app/admin')}
               style={{
                 background: 'none', border: 'none', color: 'var(--text-secondary)',
@@ -57,7 +57,7 @@ const Sidebar = forwardRef<HTMLDivElement, SidebarProps>(({
               <FiShield />
             </button>
           )}
-          <button
+          <button className="sidebar-nav-btn mobile-hide-btn"
             onClick={() => onNavigate('/app/settings')}
             style={{
               background: 'none', border: 'none', color: 'var(--text-secondary)',
@@ -67,7 +67,7 @@ const Sidebar = forwardRef<HTMLDivElement, SidebarProps>(({
           >
             <FiSettings />
           </button>
-          <button
+          <button className="sidebar-nav-btn mobile-hide-btn"
             onClick={onLogout}
             style={{
               background: 'none', border: 'none', color: 'var(--text-secondary)',
