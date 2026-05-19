@@ -619,44 +619,51 @@ function VoiceMessagePlayer({ voiceUrl, duration, isOwn, isPlaying, onPlay }: {
     };
   }, [isPlaying, voiceUrl]);
 
-  const dispTime = isPlaying ? formatTime(currentTime) : '0:00';
+  const dispTime = formatTime(currentTime);
   const dispTotal = duration.replace('🎤 ', '');
 
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: '0.5rem',
+      display: 'flex', alignItems: 'center', gap: '0.4rem',
       minWidth: 180, maxWidth: 260, padding: '0.1rem 0',
     }}>
       <button
         onClick={onPlay}
         style={{
-          width: 32, height: 32, borderRadius: '50%', border: 'none',
+          width: 30, height: 30, borderRadius: '50%', border: 'none',
           background: 'var(--primary)', color: 'white', cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '0.8rem', flexShrink: 0,
+          fontSize: '0.75rem', flexShrink: 0,
         }}
       >
         {isPlaying ? <BsStopFill /> : <BsPlayFill />}
       </button>
+      <span style={{
+        fontSize: '0.72rem', color: 'var(--text-secondary)',
+        fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', minWidth: 30,
+        fontFamily: 'monospace',
+      }}>
+        {dispTime}
+      </span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
-          height: 6, borderRadius: 3,
+          height: 4, borderRadius: 2,
           background: isOwn ? 'rgba(0,0,0,0.08)' : 'var(--border)',
           position: 'relative', overflow: 'hidden', cursor: 'pointer',
         }}>
           <div style={{
             width: `${Math.min(progress, 100)}%`, height: '100%',
-            borderRadius: 3, background: 'var(--primary)',
+            borderRadius: 2, background: 'var(--primary)',
             transition: 'width 0.1s linear',
           }} />
         </div>
       </div>
       <span style={{
         fontSize: '0.72rem', color: 'var(--text-secondary)',
-        fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
-        minWidth: 52, textAlign: 'right',
+        fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', minWidth: 30,
+        fontFamily: 'monospace', textAlign: 'right',
       }}>
-        {isPlaying ? dispTime : dispTotal}
+        {dispTotal}
       </span>
     </div>
   );
