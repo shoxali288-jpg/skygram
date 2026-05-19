@@ -9,17 +9,17 @@ function getClient(): SupabaseClient {
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error(
-      'Supabase not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.'
-    );
+    throw new Error('Supabase not configured');
   }
 
-  client = createClient(supabaseUrl, supabaseAnonKey);
+  client = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: { persistSession: false },
+  });
   return client;
 }
 
 export const supabase = new Proxy({} as SupabaseClient, {
-  get(_, prop: string | symbol) {
+  get(_target: any, prop: string | symbol) {
     const c = getClient();
     const value = (c as any)[prop];
     if (typeof value === 'function') {
