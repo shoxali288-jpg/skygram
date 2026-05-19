@@ -5,12 +5,8 @@ let client: SupabaseClient | null = null;
 function getClient(): SupabaseClient {
   if (client) return client;
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Supabase not configured');
-  }
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://oxpmqvxhscvmmwevznhy.supabase.co';
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_pUbRgp79YLYVUAgJe7VPYg_rDsKsAyg';
 
   client = createClient(supabaseUrl, supabaseAnonKey, {
     auth: { persistSession: false },
