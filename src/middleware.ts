@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
+import { verifySession } from '@/lib/auth';
 
 const SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'skygram-default-secret-change-in-production'
@@ -10,35 +11,47 @@ const COOKIE_NAME = 'skygram_session';
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const token = request.cookies.get(COOKIE_NAME)?.value;
-
-  const protectedPaths = ['/app', '/chat', '/profile', '/settings', '/admin', '/search'];
-  const isProtected = protectedPaths.some((p) => pathname.startsWith(p));
-
-  const authPaths = ['/login', '/register'];
-  const isAuthPage = authPaths.some((p) => pathname.startsWith(p));
-
-  let isValid = false;
-  if (token) {
-    try {
-      await jwtVerify(token, SECRET);
-      isValid = true;
-    } catch {
-      isValid = false;
-    }
+  
+  // Разрешаем доступ к публичным путям без проверки
+  const publicPaths = ['/login', '/register', '/api/', '/_next/static', '/_next/image', '/favicon.ico', '/icons', '/manifest.json', '/sw.js', '/sounds'];
+  const isPublicPath = publicPaths.some(path => pathname.startsWith(path));
+  
+  if (isPublicPath) {
+    return NextResponse.next();
   }
 
-  if (isProtected && !isValid) {
+  const token = request.cookies.get(COOKIE_NAME)?.value;
+  
+  // Если нет токена, перенаправляем на login
+  if (!token) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  if (isAuthPage && isValid) {
-    return NextResponse.redirect(new URL('/app', request.url));
+  try {
+    // Проверяем сессию и блокировку пользователя
+    const session = await verifySession();
+    
+    if (!session) {
+      const loginUrl = new URL('/login', request.url);
+      loginUrl.searchParams.set('redirect', pathname);
+      return NextResponse.redirect(loginUrl);
+    }
+    
+    // Если пользователь заблокирован, перенаправляем на страницу блокировки
+    if (session.is_blocked) {
+      const blockedUrl = new URL('/blocked', request.url);
+      return NextResponse.redirect(blockedUrl);
+    }
+    
+    return NextResponse.next();
+  } catch (error) {
+    // При любой ошибке верификации перенаправляем на login
+    const loginUrl = new URL('/login', request.url);
+    loginUrl.searchParams.set('redirect', pathname);
+    return NextResponse.redirect(loginUrl);
   }
-
-  return NextResponse.next();
 }
 
 export const config = {
