@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 import { useApp } from '@/app/ClientLayout';
-import { FiArrowLeft, FiSearch, FiTrash2, FiStar, FiMic, FiPaperclip, FiSmile } from 'react-icons/fi';
+import {
+  FiArrowLeft, FiSearch, FiTrash2, FiStar, FiMic, FiPaperclip, FiSmile, FiPhone, FiVideo, FiPhoneOff, FiVideoOff, FiPhoneMissed, FiPhoneForwarded
+} from 'react-icons/fi';
 import { BsCheckCircleFill, BsCheck2, BsCheck2All, BsPlayFill, BsStopFill } from 'react-icons/bs';
 import { IoSend } from 'react-icons/io5';
 import { playNotificationSound } from '@/lib/sound';
@@ -55,6 +57,16 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showStickers, setShowStickers] = useState(false);
   const [uploadingMedia, setUploadingMedia] = useState(false);
+
+  const [callState, setCallState] = useState<'idle' | 'calling' | 'incoming' | 'connected' | 'ended'>('idle');
+  const [callType, setCallType] = useState<'audio' | 'video'>('audio');
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [callDuration, setCallDuration] = useState(0);
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const callChannelRef = useRef<any>(null);
+  const callTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [callMissed, setCallMissed] = useState(false);
 
   const stickers = ['👍', '❤️', '😂', '😢', '😡', '🔥', '💯', '🎉', '👏', '🤝', '😊', '🥰', '😎', '🤔', '🙏', '💪'];
 
@@ -110,9 +122,49 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       })
       .subscribe();
 
+    // Call signaling channel
+    const callChan = supabase.channel(`call:${chatId}`, {
+      config: { broadcast: { self: false } },
+    });
+
+    callChan
+      .on('broadcast', { event: 'call-offer' }, (payload: any) => {
+        const { from, fromUsername, type: callTypePayload } = payload.payload;
+        if (from !== user.id && callState === 'idle') {
+          setCallType(callTypePayload || 'audio');
+          setCallState('incoming');
+          callChannelRef.current = callChan;
+          if (soundEnabled) playSound();
+        }
+      })
+      .on('broadcast', { event: 'call-accept' }, async (payload: any) => {
+        if (callState === 'calling') {
+          setCallState('connected');
+          startCallTimer();
+        }
+      })
+      .on('broadcast', { event: 'call-end' }, (payload: any) => {
+        if (callState === 'calling' || callState === 'connected' || callState === 'incoming') {
+          setCallMissed(callState === 'calling' || callState === 'incoming');
+          cleanupCall();
+          if (payload.payload?.reason !== 'ended') {
+            toast.error('Звонок отклонен');
+          }
+        }
+      })
+      .on('broadcast', { event: 'ice-candidate' }, (payload: any) => {
+        const { candidate } = payload.payload;
+        if (candidate && peerConnectionRef.current) {
+          peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+        }
+      })
+      .subscribe();
+
     return () => {
       supabase.removeChannel(messagesSub);
       supabase.removeChannel(typingSub);
+      supabase.removeChannel(callChan);
+      cleanupCall();
     };
   }, [chatId, user]);
 
@@ -134,6 +186,175 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   const playSound = () => {
     playNotificationSound();
+  };
+
+  const getCallChannel = () => {
+    if (!chatId || !user) return null;
+    const channel = supabase.channel(`call:${chatId}`, {
+      config: { broadcast: { self: false } },
+    });
+    return channel;
+  };
+
+  const startCall = async (type: 'audio' | 'video') => {
+    if (!chatId || !user || !otherUser) return;
+    setCallType(type);
+    setCallState('calling');
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: type === 'video',
+      });
+      setLocalStream(stream);
+
+      const pc = new RTCPeerConnection({
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+      });
+      peerConnectionRef.current = pc;
+
+      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+
+      pc.onicecandidate = (e) => {
+        if (e.candidate && callChannelRef.current) {
+          callChannelRef.current.send({
+            type: 'broadcast',
+            event: 'ice-candidate',
+            payload: { candidate: e.candidate, from: user.id },
+          });
+        }
+      };
+
+      pc.ontrack = (e) => {
+        setRemoteStream(e.streams[0]);
+      };
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      const channel = getCallChannel();
+      if (channel) {
+        callChannelRef.current = channel;
+        channel.subscribe((status: string) => {
+          if (status === 'SUBSCRIBED') {
+            channel.send({
+              type: 'broadcast',
+              event: 'call-offer',
+              payload: { offer, from: user.id, fromUsername: user.username, type, chatId },
+            });
+          }
+        });
+      }
+    } catch (err) {
+      toast.error('Ошибка доступа к камере/микрофону');
+      setCallState('idle');
+    }
+  };
+
+  const answerCall = async (accept: boolean) => {
+    if (!chatId || !user || !otherUser) return;
+    if (!accept) {
+      setCallState('idle');
+      if (callChannelRef.current) {
+        callChannelRef.current.send({
+          type: 'broadcast',
+          event: 'call-end',
+          payload: { from: user.id, reason: 'declined' },
+        });
+      }
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: callType === 'video',
+      });
+      setLocalStream(stream);
+
+      const pc = new RTCPeerConnection({
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+      });
+      peerConnectionRef.current = pc;
+
+      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+
+      pc.onicecandidate = (e) => {
+        if (e.candidate && callChannelRef.current) {
+          callChannelRef.current.send({
+            type: 'broadcast',
+            event: 'ice-candidate',
+            payload: { candidate: e.candidate, from: user.id },
+          });
+        }
+      };
+
+      pc.ontrack = (e) => {
+        setRemoteStream(e.streams[0]);
+      };
+
+      if (callChannelRef.current) {
+        callChannelRef.current.send({
+          type: 'broadcast',
+          event: 'call-accept',
+          payload: { from: user.id, fromUsername: user.username },
+        });
+      }
+
+      setCallState('connected');
+      startCallTimer();
+    } catch (err) {
+      toast.error('Ошибка доступа к камере/микрофону');
+      setCallState('idle');
+    }
+  };
+
+  const endCall = () => {
+    if (callChannelRef.current) {
+      callChannelRef.current.send({
+        type: 'broadcast',
+        event: 'call-end',
+        payload: { from: user?.id, reason: 'ended' },
+      });
+    }
+    cleanupCall();
+  };
+
+  const cleanupCall = () => {
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+    }
+    if (localStream) {
+      localStream.getTracks().forEach((t) => t.stop());
+      setLocalStream(null);
+    }
+    if (remoteStream) {
+      remoteStream.getTracks().forEach((t) => t.stop());
+      setRemoteStream(null);
+    }
+    if (callChannelRef.current) {
+      supabase.removeChannel(callChannelRef.current);
+      callChannelRef.current = null;
+    }
+    if (callTimerRef.current) {
+      clearInterval(callTimerRef.current);
+      callTimerRef.current = null;
+    }
+    setCallDuration(0);
+    setCallState('idle');
+  };
+
+  const startCallTimer = () => {
+    callTimerRef.current = setInterval(() => {
+      setCallDuration((prev) => prev + 1);
+    }, 1000);
+  };
+
+  const formatCallDuration = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
   const loadChat = async () => {
@@ -532,6 +753,24 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           </div>
         </div>
         <div style={{ display: 'flex', gap: '0.25rem' }}>
+          <button
+            onClick={() => startCall('audio')}
+            className="message-action-btn"
+            title="Аудиозвонок"
+            disabled={callState !== 'idle'}
+            style={{ opacity: callState !== 'idle' ? 0.5 : 1, color: 'var(--primary)' }}
+          >
+            <FiPhone />
+          </button>
+          <button
+            onClick={() => startCall('video')}
+            className="message-action-btn"
+            title="Видеозвонок"
+            disabled={callState !== 'idle'}
+            style={{ opacity: callState !== 'idle' ? 0.5 : 1, color: 'var(--primary)' }}
+          >
+            <FiVideo />
+          </button>
           <button onClick={() => setShowSearch(!showSearch)} className="message-action-btn" title="Поиск">
             <FiSearch />
           </button>
@@ -762,6 +1001,154 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           )}
         </div>
       </div>
+
+      {/* Call Overlay */}
+      {callState !== 'idle' && (
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.9)', zIndex: 100,
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          justifyContent: 'center', color: 'white', gap: '1.5rem',
+        }}>
+          {callState === 'calling' && (
+            <>
+              <div className="chat-avatar" style={{ width: 80, height: 80, fontSize: '2rem', border: '3px solid var(--primary)' }}>
+                {otherUser?.avatar_url ? <img src={otherUser.avatar_url} alt="" /> : otherUser?.username?.charAt(0).toUpperCase()}
+              </div>
+              <div style={{ fontSize: '1.2rem', fontWeight: 600 }}>@{otherUser?.username}</div>
+              <div style={{ fontSize: '0.9rem', opacity: 0.7, animation: 'splashPulse 1.5s infinite' }}>
+                {callType === 'video' ? '🎥 Видеозвонок...' : '📞 Аудиозвонок...'}
+              </div>
+              <button
+                onClick={endCall}
+                style={{
+                  width: 56, height: 56, borderRadius: '50%', border: 'none',
+                  background: '#ef4444', color: 'white', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '1.3rem',
+                }}
+              >
+                <FiPhoneOff />
+              </button>
+            </>
+          )}
+          {callState === 'incoming' && (
+            <>
+              <div className="chat-avatar" style={{ width: 80, height: 80, fontSize: '2rem', border: '3px solid #22c55e' }}>
+                {otherUser?.avatar_url ? <img src={otherUser.avatar_url} alt="" /> : otherUser?.username?.charAt(0).toUpperCase()}
+              </div>
+              <div style={{ fontSize: '1.2rem', fontWeight: 600 }}>@{otherUser?.username}</div>
+              <div style={{ fontSize: '0.9rem', opacity: 0.7 }}>
+                {callType === 'video' ? '📹 Входящий видеозвонок...' : '📞 Входящий аудиозвонок...'}
+              </div>
+              <div style={{ display: 'flex', gap: '2rem' }}>
+                <button
+                  onClick={() => answerCall(false)}
+                  style={{
+                    width: 56, height: 56, borderRadius: '50%', border: 'none',
+                    background: '#ef4444', color: 'white', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '1.3rem',
+                  }}
+                >
+                  <FiPhoneOff />
+                </button>
+                <button
+                  onClick={() => answerCall(true)}
+                  style={{
+                    width: 56, height: 56, borderRadius: '50%', border: 'none',
+                    background: '#22c55e', color: 'white', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '1.3rem',
+                  }}
+                >
+                  <FiPhone />
+                </button>
+              </div>
+            </>
+          )}
+          {callState === 'connected' && (
+            <>
+              {callType === 'video' ? (
+                <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+                  {remoteStream ? (
+                    <video
+                      ref={(el) => { if (el) el.srcObject = remoteStream; }}
+                      autoPlay playsInline
+                      style={{ flex: 1, width: '100%', objectFit: 'cover', borderRadius: 12 }}
+                    />
+                  ) : (
+                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <div className="chat-avatar" style={{ width: 80, height: 80, fontSize: '2rem', border: '3px solid var(--primary)' }}>
+                        {otherUser?.avatar_url ? <img src={otherUser.avatar_url} alt="" /> : otherUser?.username?.charAt(0).toUpperCase()}
+                      </div>
+                    </div>
+                  )}
+                  {localStream && (
+                    <video
+                      ref={(el) => { if (el) el.srcObject = localStream; }}
+                      autoPlay playsInline muted
+                      style={{
+                        position: 'absolute', bottom: 100, right: 20,
+                        width: 120, height: 160, borderRadius: 12,
+                        objectFit: 'cover', border: '2px solid rgba(255,255,255,0.3)',
+                        background: '#111',
+                      }}
+                    />
+                  )}
+                  <div style={{
+                    position: 'absolute', bottom: 0, left: 0, right: 0,
+                    padding: '1rem', display: 'flex', justifyContent: 'center',
+                    background: 'linear-gradient(transparent, rgba(0,0,0,0.7))',
+                  }}>
+                    <div style={{ textAlign: 'center', marginBottom: '0.5rem' }}>
+                      <div style={{ fontSize: '0.9rem', opacity: 0.8 }}>{formatCallDuration(callDuration)}</div>
+                    </div>
+                    <button
+                      onClick={endCall}
+                      style={{
+                        width: 56, height: 56, borderRadius: '50%', border: 'none',
+                        background: '#ef4444', color: 'white', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '1.3rem',
+                      }}
+                    >
+                      <FiPhoneOff />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center' }}>
+                  <div className="chat-avatar" style={{ width: 100, height: 100, fontSize: '2.5rem', border: '3px solid #22c55e' }}>
+                    {otherUser?.avatar_url ? <img src={otherUser.avatar_url} alt="" /> : otherUser?.username?.charAt(0).toUpperCase()}
+                  </div>
+                  <div style={{ fontSize: '1.2rem', fontWeight: 600, marginTop: '1rem' }}>@{otherUser?.username}</div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 700, margin: '0.5rem 0', fontVariantNumeric: 'tabular-nums' }}>
+                    {formatCallDuration(callDuration)}
+                  </div>
+                  <button
+                    onClick={endCall}
+                    style={{
+                      marginTop: '1rem', width: 56, height: 56, borderRadius: '50%', border: 'none',
+                      background: '#ef4444', color: 'white', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '1.3rem',
+                    }}
+                  >
+                    <FiPhoneOff />
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+          {callState === 'ended' && (
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>Звонок завершен</div>
+              <div style={{ fontSize: '0.9rem', opacity: 0.7 }}>{formatCallDuration(callDuration)}</div>
+            </div>
+          )}
+        </div>
+      )}
 
     </div>
   );
