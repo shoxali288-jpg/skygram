@@ -13,6 +13,8 @@ export async function GET(
     const { chatId } = await params;
     const url = new URL(request.url);
     const searchQuery = url.searchParams.get('search')?.toLowerCase();
+    const limit = parseInt(url.searchParams.get('limit') || '50');
+    const offset = parseInt(url.searchParams.get('offset') || '0');
 
     const { data: chat } = await supabase.from('chats').select('*').eq('id', chatId).single();
     if (!chat) return NextResponse.json({ error: 'Чат не найден' }, { status: 404 });
@@ -25,7 +27,8 @@ export async function GET(
       .from('messages')
       .select('*')
       .eq('chat_id', chatId)
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: false }) // Сначала новые сообщения
+      .range(offset, offset + limit - 1);
 
     if (searchQuery) {
       query = query.ilike('text', `%${searchQuery}%`);

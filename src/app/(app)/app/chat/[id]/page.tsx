@@ -38,6 +38,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
   const [searchInChat, setSearchInChat] = useState('');
   const [showSearch, setShowSearch] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -118,9 +120,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     scrollToBottom();
   }, [messages]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+   const scrollToBottom = () => {
+     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+   };
+
+   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+     const target = e.currentTarget;
+     if (target.scrollTop === 0 && !loadingMore && hasMore) {
+       setLoadingMore(true);
+       loadMessages(false);
+     }
+   };
 
   const playSound = () => {
     playNotificationSound();
@@ -137,13 +147,42 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     } catch {}
   };
 
-  const loadMessages = async () => {
-    try {
-      const res = await fetch(`/api/messages/${chatId}`);
-      const data = await res.json();
-      if (data.messages) setMessages(data.messages);
-    } catch {}
-  };
+   const loadMessages = async (reset = false) => {
+     try {
+       if (reset) {
+         setLoadingMore(false);
+         setHasMore(true);
+         setMessages([]);
+       }
+       const res = await fetch(`/api/messages/${chatId}?limit=50&offset=${reset ? 0 : messages.length}`);
+       const data = await res.json();
+       if (data.messages) {
+         // Сортируем по времени создания (старые сначала) для правильного отображения
+         const sortedMessages = [...data.messages].sort((a, b) => 
+           new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+         );
+         if (reset) {
+           setMessages(sortedMessages);
+         } else {
+           setMessages(prev => [...prev, ...sortedMessages]);
+         }
+         setHasMore(data.messages.length === 50); // Предполагаем, что если получили 50, то есть еще
+         // Прокручиваем к низу после загрузки (только при первой загрузке)
+         if (reset) {
+           setTimeout(scrollToBottom, 100);
+         }
+       } else {
+         setHasMore(false);
+       }
+     } catch (error) {
+       console.error('Error loading messages:', error);
+       setHasMore(false);
+     } finally {
+       if (!reset) {
+         setLoadingMore(false);
+       }
+     }
+   };
 
   const markAsRead = async () => {
     if (!chatId) return;
