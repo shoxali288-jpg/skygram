@@ -290,44 +290,66 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
   };
 
-  const sendMessage = async () => {
-    const text = newMessage.trim();
-    if (!text) return;
+   const sendMessage = async () => {
+     const text = newMessage.trim();
+     if (!text) return;
 
-    if (editingMsg) {
-      try {
-        const res = await fetch(`/api/messages/${chatId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message_id: editingMsg, text, action: 'edit' }),
-        });
-        if (res.ok) {
-          setEditingMsg(null);
-          setEditText('');
-          setNewMessage('');
-        }
-      } catch {}
-      return;
-    }
+     if (editingMsg) {
+       try {
+         const res = await fetch(`/api/messages/${chatId}`, {
+           method: 'PATCH',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({ message_id: editingMsg, text, action: 'edit' }),
+         });
+         if (res.ok) {
+           setEditingMsg(null);
+           setEditText('');
+           setNewMessage('');
+         }
+       } catch {}
+       return;
+     }
 
-    try {
-      const body: any = { text };
-      if (replyTo) body.reply_to_message_id = replyTo.id;
+     // Optimistic update - add message immediately
+     const optimisticMessage: Message = {
+       id: `optimistic-${Date.now()}-${Math.random()}`,
+       chat_id: chatId,
+       sender_id: user?.id || '',
+       text,
+       voice_url: null,
+       media_url: null,
+       created_at: new Date().toISOString(),
+       edited_at: null,
+       is_deleted: false,
+       is_read: false,
+       reply_to_message_id: replyTo?.id || null,
+     };
 
-      const res = await fetch(`/api/messages/${chatId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (res.ok) {
-        setNewMessage('');
-        setReplyTo(null);
-        scrollToBottom();
-      }
-    } catch {
-      toast.error('Ошибка отправки');
-    }
-  };
+     setMessages(prev => [...prev, optimisticMessage]);
+     setNewMessage('');
+     setReplyTo(null);
+     scrollToBottom();
+
+     try {
+       const body: any = { text };
+       if (replyTo) body.reply_to_message_id = replyTo.id;
+
+       const res = await fetch(`/api/messages/${chatId}`, {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify(body),
+       });
+       if (!res.ok) {
+         // Remove optimistic message on error
+         setMessages(prev => prev.filter(m => m.id !== optimisticMessage.id));
+         toast.error('Ошибка отправки');
+       }
+     } catch (error) {
+       // Remove optimistic message on error
+       setMessages(prev => prev.filter(m => m.id !== optimisticMessage.id));
+       toast.error('Ошибка отправки');
+     }
+   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
