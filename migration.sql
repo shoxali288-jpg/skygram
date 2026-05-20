@@ -52,10 +52,13 @@ CREATE TABLE IF NOT EXISTS reports (
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id);
 CREATE INDEX IF NOT EXISTS idx_messages_sender_id ON messages(sender_id);
+CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_chats_user1_id ON chats(user1_id);
 CREATE INDEX IF NOT EXISTS idx_chats_user2_id ON chats(user2_id);
+CREATE INDEX IF NOT EXISTS idx_chats_created_at ON chats(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_users_is_blocked ON users(is_blocked);
+CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
 
 -- Enable Row Level Security
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
@@ -100,6 +103,22 @@ CREATE POLICY "Users can insert messages" ON messages
       WHERE chats.id = chat_id
       AND (chats.user1_id = auth.uid() OR chats.user2_id = auth.uid())
     )
+  );
+
+-- Admin policies: admins can read all chats, messages, and reports
+CREATE POLICY "Admins can read all chats" ON chats
+  FOR SELECT USING (
+    EXISTS (SELECT 1 FROM users WHERE users.id = auth.uid() AND users.role = 'admin')
+  );
+
+CREATE POLICY "Admins can read all messages" ON messages
+  FOR SELECT USING (
+    EXISTS (SELECT 1 FROM users WHERE users.id = auth.uid() AND users.role = 'admin')
+  );
+
+CREATE POLICY "Admins can update messages" ON messages
+  FOR UPDATE USING (
+    EXISTS (SELECT 1 FROM users WHERE users.id = auth.uid() AND users.role = 'admin')
   );
 
 -- Enable Realtime for messages table (for live chat)

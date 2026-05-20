@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { FiArrowLeft, FiSearch, FiUsers, FiMessageSquare, FiActivity, FiShield, FiCheck, FiX, FiTrash2 } from 'react-icons/fi';
+import { FiArrowLeft, FiSearch, FiUsers, FiMessageSquare, FiActivity, FiShield, FiCheck, FiX, FiTrash2, FiMessageCircle, FiExternalLink } from 'react-icons/fi';
 import { BsCheckCircleFill } from 'react-icons/bs';
 import { useApp } from '@/app/ClientLayout';
 
@@ -45,7 +45,11 @@ export default function AdminPage() {
   const [messages, setMessages] = useState<AdminMessage[]>([]);
   const [reports, setReports] = useState<any[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [allChats, setAllChats] = useState<any[]>([]);
+  const [selectedChat, setSelectedChat] = useState<any>(null);
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [chatsSearchQuery, setChatsSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -75,6 +79,11 @@ export default function AdminPage() {
         const res = await fetch('/api/admin/messages');
         const data = await res.json();
         setMessages(data.messages || []);
+      } else if (activeTab === 'chats') {
+        const q = chatsSearchQuery ? `?q=${encodeURIComponent(chatsSearchQuery)}` : '';
+        const res = await fetch(`/api/admin/chats${q}`);
+        const data = await res.json();
+        setAllChats(data.chats || []);
       } else if (activeTab === 'reports') {
         const res = await fetch('/api/admin/reports');
         const data = await res.json();
@@ -125,6 +134,38 @@ export default function AdminPage() {
     }
   };
 
+  const loadChatMessages = async (chatId: string) => {
+    try {
+      const res = await fetch(`/api/admin/chats/${chatId}`);
+      const data = await res.json();
+      if (data.messages) {
+        const sorted = [...data.messages].sort((a: any, b: any) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
+        setChatMessages(sorted);
+        setSelectedChat(data.chat);
+      }
+    } catch {
+      toast.error('Ошибка загрузки чата');
+    }
+  };
+
+  const deleteChatMessage = async (messageId: string) => {
+    try {
+      const res = await fetch('/api/admin/messages', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageId }),
+      });
+      if (res.ok) {
+        toast.success('Сообщение удалено');
+        setChatMessages(prev => prev.map(m => m.id === messageId ? { ...m, is_deleted: true } : m));
+      }
+    } catch {
+      toast.error('Ошибка удаления');
+    }
+  };
+
   const deleteMessage = async (messageId: string) => {
     try {
       const res = await fetch('/api/admin/messages', {
@@ -146,6 +187,7 @@ export default function AdminPage() {
     { key: 'users', label: 'Пользователи', icon: FiUsers },
     { key: 'verify', label: 'Верификация', icon: BsCheckCircleFill },
     { key: 'messages', label: 'Сообщения', icon: FiMessageSquare },
+    { key: 'chats', label: 'Все чаты', icon: FiMessageCircle },
     { key: 'reports', label: 'Жалобы', icon: FiShield },
   ] as const;
 
@@ -389,6 +431,119 @@ export default function AdminPage() {
                     <FiTrash2 /> Удалить
                   </button>
                 )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!loading && activeTab === 'chats' && !selectedChat && (
+        <div className="admin-card">
+          <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem' }}>
+            <input
+              className="sky-input"
+              placeholder="Поиск чата по нику пользователя..."
+              value={chatsSearchQuery}
+              onChange={(e) => setChatsSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && loadData()}
+              style={{ flex: 1 }}
+            />
+            <button className="sky-btn sky-btn-sm" style={{ width: 'auto' }} onClick={loadData}>Найти</button>
+          </div>
+          {allChats.length === 0 && (
+            <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>Чаты не найдены</p>
+          )}
+          <div style={{ overflowX: 'auto', maxHeight: '70vh', overflowY: 'auto' }}>
+            {allChats.map((chat: any) => {
+              const u1 = chat.user1 || {};
+              const u2 = chat.user2 || {};
+              return (
+                <div key={chat.id}
+                  onClick={() => loadChatMessages(chat.id)}
+                  style={{
+                    padding: '0.75rem', borderBottom: '1px solid var(--border)',
+                    display: 'flex', alignItems: 'center', gap: '0.75rem',
+                    cursor: 'pointer', transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--background)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                  <div style={{ display: 'flex', gap: '0.25rem', fontSize: '0.9rem', flex: 1, minWidth: 0 }}>
+                    <span style={{ fontWeight: 600, color: 'var(--foreground)' }}>@{u1.username}</span>
+                    <span style={{ color: 'var(--text-secondary)' }}>↔</span>
+                    <span style={{ fontWeight: 600, color: 'var(--foreground)' }}>@{u2.username}</span>
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    {chat.last_message && (
+                      <span style={{
+                        maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        fontStyle: chat.last_message.is_deleted ? 'italic' : 'normal',
+                        opacity: chat.last_message.is_deleted ? 0.5 : 0.8,
+                      }}>
+                        {chat.last_message.is_deleted ? 'Сообщение удалено' : chat.last_message.text}
+                      </span>
+                    )}
+                    <FiExternalLink style={{ fontSize: '0.8rem', color: 'var(--primary)' }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {!loading && activeTab === 'chats' && selectedChat && (
+        <div className="admin-card">
+          <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <button className="sky-btn sky-btn-sm" style={{ width: 'auto' }} onClick={() => { setSelectedChat(null); setChatMessages([]); }}>
+              ← Назад
+            </button>
+            <span style={{ fontWeight: 600 }}>
+              Чат: @{selectedChat.user1?.username} ↔ @{selectedChat.user2?.username}
+            </span>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+              ({new Date(selectedChat.created_at).toLocaleDateString('ru-RU')})
+            </span>
+          </div>
+          <div style={{ overflowX: 'auto', maxHeight: '65vh', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 12, padding: '0.5rem' }}>
+            {chatMessages.length === 0 && (
+              <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>Нет сообщений в чате</p>
+            )}
+            {chatMessages.map((msg: any) => (
+              <div key={msg.id} style={{
+                padding: '0.6rem 0.75rem', marginBottom: '0.25rem',
+                borderBottom: '1px solid var(--border)',
+                borderRadius: 8,
+                background: msg.is_deleted ? 'var(--background)' : 'transparent',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '0.8rem', marginBottom: '0.2rem' }}>
+                      <span style={{ fontWeight: 600, color: msg.sender_id === selectedChat.user1?.id ? '#3b82f6' : '#22c55e' }}>
+                        @{msg.sender?.username || 'Unknown'}
+                      </span>
+                      <span style={{ color: 'var(--text-secondary)', marginLeft: '0.5rem', fontSize: '0.75rem' }}>
+                        {new Date(msg.created_at).toLocaleString('ru-RU')}
+                      </span>
+                    </div>
+                    <div style={{
+                      fontSize: '0.9rem',
+                      fontStyle: msg.is_deleted ? 'italic' : 'normal',
+                      opacity: msg.is_deleted ? 0.5 : 0.9,
+                    }}>
+                      {msg.voice_url ? '🎤 Голосовое сообщение' : (msg.media_url ? '📎 Медиафайл' : (msg.is_deleted ? '⚠ Сообщение удалено' : msg.text))}
+                    </div>
+                  </div>
+                  {!msg.is_deleted && (
+                    <button
+                      className="sky-btn sky-btn-sm sky-btn-danger"
+                      style={{ width: 'auto', flexShrink: 0, fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                      onClick={() => deleteChatMessage(msg.id)}
+                    >
+                      <FiTrash2 /> Удалить
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
