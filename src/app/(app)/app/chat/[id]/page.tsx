@@ -787,36 +787,54 @@ function VoiceMessagePlayer({ voiceUrl, duration, isOwn, isPlaying, onPlay }: {
     return `${m}:${sec.toString().padStart(2, '0')}`;
   };
 
-  useEffect(() => {
-    if (!isPlaying) {
-      setCurrentTime(0);
-      setProgress(0);
-      return;
-    }
-    const audio = new Audio(voiceUrl);
-    audioRef.current = audio;
-    audio.play().catch(() => {});
+   useEffect(() => {
+     if (!isPlaying) {
+       setCurrentTime(0);
+       setProgress(0);
+       return;
+     }
+     const audio = new Audio(voiceUrl);
+     audioRef.current = audio;
+     
+     const playAudio = () => {
+       audio.play().catch((error) => {
+         console.error('Voice message playback error:', error);
+         toast.error('Ошибка воспроизведения голоса: ' + error.message);
+         setPlayingVoiceId(null);
+         if (audioRef.current) { 
+           audioRef.current.pause(); 
+           audioRef.current = null; 
+         }
+       });
+     };
 
-    const update = () => {
-      if (audio.duration && !isNaN(audio.duration)) {
-        setCurrentTime(audio.currentTime);
-        setProgress((audio.currentTime / audio.duration) * 100);
-      }
-      animRef.current = requestAnimationFrame(update);
-    };
-    animRef.current = requestAnimationFrame(update);
+     // Try to play, but handle autoplay restrictions
+     playAudio();
 
-    audio.onended = () => {
-      cancelAnimationFrame(animRef.current);
-      setCurrentTime(totalSeconds);
-      setProgress(100);
-    };
+     const update = () => {
+       if (audio.duration && !isNaN(audio.duration)) {
+         setCurrentTime(audio.currentTime);
+         setProgress((audio.currentTime / audio.duration) * 100);
+       }
+       animRef.current = requestAnimationFrame(update);
+     };
+     animRef.current = requestAnimationFrame(update);
 
-    return () => {
-      cancelAnimationFrame(animRef.current);
-      if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
-    };
-  }, [isPlaying, voiceUrl]);
+     audio.onended = () => {
+       cancelAnimationFrame(animRef.current);
+       setCurrentTime(totalSeconds);
+       setProgress(100);
+       setPlayingVoiceId(null);
+     };
+
+     return () => {
+       cancelAnimationFrame(animRef.current);
+       if (audioRef.current) { 
+         audioRef.current.pause(); 
+         audioRef.current = null; 
+       }
+     };
+   }, [isPlaying, voiceUrl]);
 
   const dispTime = formatTime(currentTime);
   const dispTotal = duration.replace('🎤 ', '');
