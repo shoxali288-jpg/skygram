@@ -14,6 +14,7 @@ interface AdminUser {
   role: string;
   is_verified: boolean;
   is_blocked: boolean;
+  is_deleted: boolean;
   created_at: string;
   last_seen: string;
 }
@@ -115,7 +116,7 @@ export default function AdminPage() {
     }
   };
 
-  const handleBlock = async (userId: string, action: 'block' | 'unblock' | 'kick') => {
+  const handleBlock = async (userId: string, action: 'block' | 'unblock' | 'kick' | 'restore') => {
     try {
       const res = await fetch('/api/admin/block', {
         method: 'POST',
@@ -297,8 +298,8 @@ export default function AdminPage() {
                       </span>
                     </td>
                     <td>
-                      <span style={{ color: u.is_blocked ? '#ef4444' : '#22c55e', fontWeight: 600, fontSize: '0.85rem' }}>
-                        {u.is_blocked ? 'Заблокирован' : 'Активен'}
+                      <span style={{ color: u.is_deleted ? '#6b7280' : (u.is_blocked ? '#ef4444' : '#22c55e'), fontWeight: 600, fontSize: '0.85rem' }}>
+                        {u.is_deleted ? 'Удален' : (u.is_blocked ? 'Заблокирован' : 'Активен')}
                       </span>
                     </td>
                     <td style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
@@ -306,7 +307,12 @@ export default function AdminPage() {
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
-                        {u.role !== 'admin' && (
+                        {u.role !== 'admin' && u.is_deleted ? (
+                          <button className="sky-btn sky-btn-sm" style={{ width: 'auto', background: '#22c55e', color: 'white' }}
+                            onClick={() => handleBlock(u.id, 'restore')}>
+                            <FiCheck /> Восстановить
+                          </button>
+                        ) : u.role !== 'admin' && (
                           <>
                             <button className="sky-btn sky-btn-sm" style={{ width: 'auto' }}
                               onClick={() => handleVerify(u.id, u.is_verified ? 'unverify' : 'verify')}>

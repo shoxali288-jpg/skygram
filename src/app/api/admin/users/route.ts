@@ -14,7 +14,7 @@ export async function GET(request: Request) {
 
     let query = supabase
       .from('users')
-      .select('id, username, avatar_url, role, is_verified, is_blocked, created_at, last_seen')
+      .select('id, username, avatar_url, role, is_verified, is_blocked, is_deleted, created_at, last_seen')
       .order('created_at', { ascending: false });
 
     if (search) {

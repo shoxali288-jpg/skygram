@@ -10,6 +10,7 @@ interface User {
   role: string;
   is_verified: boolean;
   is_blocked: boolean;
+  is_deleted: boolean;
   last_seen: string;
   phone: string | null;
   bio: string | null;
@@ -81,7 +82,19 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     fetch('/api/auth/me')
       .then((res) => res.json())
       .then((data) => {
-        if (data.user) setUser(data.user);
+        if (data.user) {
+          if (data.user.is_deleted) {
+            document.cookie = 'skygram_session=; max-age=0; path=/';
+            window.location.href = '/blocked?reason=deleted';
+            return;
+          }
+          if (data.user.is_blocked) {
+            document.cookie = 'skygram_session=; max-age=0; path=/';
+            window.location.href = '/blocked?reason=blocked';
+            return;
+          }
+          setUser(data.user);
+        }
       })
       .catch(() => {})
       .finally(() => {

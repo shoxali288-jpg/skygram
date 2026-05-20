@@ -10,7 +10,7 @@ export async function POST(request: Request) {
     }
 
     const { userId, action } = await request.json();
-    if (!userId || !['block', 'unblock', 'kick'].includes(action)) {
+    if (!userId || !['block', 'unblock', 'kick', 'restore'].includes(action)) {
       return NextResponse.json({ error: 'Неверные данные' }, { status: 400 });
     }
 
@@ -20,17 +20,22 @@ export async function POST(request: Request) {
       .eq('id', userId)
       .single();
 
-    if (!targetUser) {
+    if (!targetUser && action !== 'restore') {
       return NextResponse.json({ error: 'Пользователь не найден' }, { status: 404 });
     }
 
-    if (targetUser.role === 'admin') {
+    if (targetUser?.role === 'admin') {
       return NextResponse.json({ error: 'Нельзя заблокировать администратора' }, { status: 403 });
     }
 
     if (action === 'kick') {
-      await supabase.from('users').delete().eq('id', userId);
-      return NextResponse.json({ success: true, message: `Пользователь ${targetUser.username} удален` });
+      await supabase.from('users').update({ is_deleted: true }).eq('id', userId);
+      return NextResponse.json({ success: true, message: `Пользователь ${targetUser?.username} удален (можно восстановить)` });
+    }
+
+    if (action === 'restore') {
+      await supabase.from('users').update({ is_deleted: false, is_blocked: false }).eq('id', userId);
+      return NextResponse.json({ success: true, message: `Пользователь ${targetUser?.username} восстановлен` });
     }
 
     const isBlocked = action === 'block';
@@ -39,8 +44,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       message: isBlocked
-        ? `Пользователь ${targetUser.username} заблокирован`
-        : `Пользователь ${targetUser.username} разблокирован`,
+        ? `Пользователь ${targetUser?.username} заблокирован`
+        : `Пользователь ${targetUser?.username} разблокирован`,
     });
   } catch {
     return NextResponse.json({ error: 'Ошибка сервера' }, { status: 500 });

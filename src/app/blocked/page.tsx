@@ -1,34 +1,26 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { clearSessionCookie } from '@/lib/auth';
-import { cookies } from 'next/headers';
 
 export default function BlockedPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const reason = searchParams.get('reason') || 'blocked';
 
   useEffect(() => {
-    // Clear the session cookie
-    const cookieStore = cookies();
-    const { name, value, options } = clearSessionCookie();
-    cookieStore.set(name, value, options);
+    document.cookie = 'skygram_session=; max-age=0; path=/';
+    const message = reason === 'deleted'
+      ? 'Ваш аккаунт был удален администратором.'
+      : 'Ваш аккаунт был заблокирован. Обратитесь к администратору.';
+    toast.error(message);
 
-    // Show toast and redirect to login after a short delay
-    toast.error('Ваш аккаунт был заблокирован. Обратитесь к администратору.');
-    
-    const redirectToLogin = () => {
-      router.push('/login');
-    };
-
-    // Delay redirect to let toast be visible
-    const timer = setTimeout(redirectToLogin, 3000);
-
-    return () => {
-      clearTimeout(timer);
-    };
+    const timer = setTimeout(() => router.push('/login'), 4000);
+    return () => clearTimeout(timer);
   }, []);
+
+  const isDeleted = reason === 'deleted';
 
   return (
     <div style={{ 
@@ -52,50 +44,44 @@ export default function BlockedPage() {
         <div style={{ 
           fontSize: '3rem', 
           marginBottom: '1.5rem',
-          color: '#ef4444'
+          color: isDeleted ? '#6b7280' : '#ef4444'
         }}>
-          🚫
+          {isDeleted ? '👤❌' : '🚫'}
         </div>
         <h1 style={{ 
           marginBottom: '1rem',
           fontSize: '1.8rem',
           color: 'var(--foreground)'
         }}>
-          Аккаунт заблокирован
+          {isDeleted ? 'Аккаунт удален' : 'Аккаунт заблокирован'}
         </h1>
         <p style={{ 
           marginBottom: '2rem',
           color: 'var(--text-secondary)',
           lineHeight: 1.6
         }}>
-          Ваш аккаунт был заблокирован администратором. Если вы считаете, что это ошибка, пожалуйста, обратитесь в службу поддержки.
+          {isDeleted
+            ? 'Ваш аккаунт был удален администратором. Если вы считаете, что это ошибка, обратитесь в поддержку — вас могут восстановить.'
+            : 'Ваш аккаунт был заблокирован администратором. Если вы считаете, что это ошибка, обратитесь в службу поддержки.'}
         </p>
-        <div style={{ 
-          display: 'flex',
-          gap: '1rem'
-        }}>
-          <button 
-            onClick={() => {
-              // Clear cookie and redirect to login immediately
-              const cookieStore = cookies();
-              const { name, value, options } = clearSessionCookie();
-              cookieStore.set(name, value, options);
-              router.push('/login');
-            }}
-            style={{
-              padding: '0.75rem 1.5rem',
-              background: 'var(--primary)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              fontWeight: '600',
-              cursor: 'pointer',
-              transition: 'all 0.2s'
-            }}
-          >
-            Войти в другой аккаунт
-          </button>
-        </div>
+        <button 
+          onClick={() => {
+            document.cookie = 'skygram_session=; max-age=0; path=/';
+            router.push('/login');
+          }}
+          style={{
+            padding: '0.75rem 1.5rem',
+            background: 'var(--primary)',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            transition: 'all 0.2s'
+          }}
+        >
+          Войти в другой аккаунт
+        </button>
       </div>
     </div>
   );
