@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 
-export default function BlockedPage() {
+function BlockedContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const reason = searchParams.get('reason') || 'blocked';
@@ -23,17 +23,17 @@ export default function BlockedPage() {
   const isDeleted = reason === 'deleted';
 
   return (
-    <div style={{ 
-      minHeight: '100vh', 
-      display: 'flex', 
-      flexDirection: 'column', 
-      alignItems: 'center', 
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
       justifyContent: 'center',
       background: 'var(--background)',
       color: 'var(--foreground)',
       padding: '2rem'
     }}>
-      <div style={{ 
+      <div style={{
         textAlign: 'center',
         padding: '2rem',
         background: 'var(--surface)',
@@ -41,21 +41,21 @@ export default function BlockedPage() {
         border: '1px solid var(--border)',
         boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
       }}>
-        <div style={{ 
-          fontSize: '3rem', 
+        <div style={{
+          fontSize: '3rem',
           marginBottom: '1.5rem',
           color: isDeleted ? '#6b7280' : '#ef4444'
         }}>
           {isDeleted ? '👤❌' : '🚫'}
         </div>
-        <h1 style={{ 
+        <h1 style={{
           marginBottom: '1rem',
           fontSize: '1.8rem',
           color: 'var(--foreground)'
         }}>
           {isDeleted ? 'Аккаунт удален' : 'Аккаунт заблокирован'}
         </h1>
-        <p style={{ 
+        <p style={{
           marginBottom: '2rem',
           color: 'var(--text-secondary)',
           lineHeight: 1.6
@@ -64,7 +64,7 @@ export default function BlockedPage() {
             ? 'Ваш аккаунт был удален администратором. Если вы считаете, что это ошибка, обратитесь в поддержку — вас могут восстановить.'
             : 'Ваш аккаунт был заблокирован администратором. Если вы считаете, что это ошибка, обратитесь в службу поддержки.'}
         </p>
-        <button 
+        <button
           onClick={() => {
             document.cookie = 'skygram_session=; max-age=0; path=/';
             router.push('/login');
@@ -84,5 +84,13 @@ export default function BlockedPage() {
         </button>
       </div>
     </div>
+  );
+}
+
+export default function BlockedPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: '2rem', textAlign: 'center' }}>Загрузка...</div>}>
+      <BlockedContent />
+    </Suspense>
   );
 }

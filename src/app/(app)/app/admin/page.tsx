@@ -41,7 +41,7 @@ interface Stats {
 export default function AdminPage() {
   const { user } = useApp();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'users' | 'stats' | 'messages' | 'reports' | 'verify'>('stats');
+  const [activeTab, setActiveTab] = useState<'users' | 'stats' | 'messages' | 'reports' | 'verify' | 'chats'>('stats');
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [messages, setMessages] = useState<AdminMessage[]>([]);
   const [reports, setReports] = useState<any[]>([]);

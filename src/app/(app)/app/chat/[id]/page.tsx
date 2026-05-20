@@ -1187,16 +1187,13 @@ function VoiceMessagePlayer({ voiceUrl, duration, isOwn, isPlaying, onPlay }: {
        audio.play().catch((error) => {
          console.error('Voice message playback error:', error);
          toast.error('Ошибка воспроизведения голоса: ' + error.message);
-         setPlayingVoiceId(null);
-         if (audioRef.current) { 
-           audioRef.current.pause(); 
-           audioRef.current = null; 
-         }
-       });
-     };
-
-     // Try to play, but handle autoplay restrictions
-     playAudio();
+          if (audioRef.current) { 
+            audioRef.current.pause(); 
+            audioRef.current = null; 
+          }
+        });
+      };
+      playAudio();
 
      const update = () => {
        if (audio.duration && !isNaN(audio.duration)) {
@@ -1207,12 +1204,12 @@ function VoiceMessagePlayer({ voiceUrl, duration, isOwn, isPlaying, onPlay }: {
      };
      animRef.current = requestAnimationFrame(update);
 
-     audio.onended = () => {
-       cancelAnimationFrame(animRef.current);
-       setCurrentTime(totalSeconds);
-       setProgress(100);
-       setPlayingVoiceId(null);
-     };
+      audio.onended = () => {
+        cancelAnimationFrame(animRef.current);
+        setCurrentTime(totalSeconds);
+        setProgress(100);
+        onPlay();
+      };
 
      return () => {
        cancelAnimationFrame(animRef.current);
